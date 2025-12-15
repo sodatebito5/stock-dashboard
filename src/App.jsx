@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 
 // ========================================
-// 設定 - GASデプロイURL
+// 設定 - GASデプロイURL（自分のURLに変更）
 // ========================================
 const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbxcVdT0GoZ1rBhocAKSxyPrUadHEjQKzIhAUiyc6rZDbhic6TH_x4eDdM9IMkbQdceJYA/exec'
 
@@ -125,13 +125,11 @@ const styles = {
     padding: '4px 10px',
     borderRadius: '12px',
     fontSize: '11px',
-    fontWeight: '500',
-    backgroundColor: '#7c3aed',
-    color: '#fff'
+    fontWeight: '500'
   },
   metrics: {
     display: 'grid',
-    gridTemplateColumns: 'repeat(4, 1fr)',
+    gridTemplateColumns: 'repeat(3, 1fr)',
     gap: '6px',
     marginTop: '12px'
   },
@@ -196,15 +194,20 @@ const getScoreColor = (score) => {
   return { bg: '#4a1010', text: '#f87171' }
 }
 
+const getEarningsBadgeStyle = (days) => {
+  if (days <= 7) return { backgroundColor: '#dc2626', color: '#fff' } // 赤
+  if (days <= 14) return { backgroundColor: '#f59e0b', color: '#fff' } // オレンジ
+  if (days <= 30) return { backgroundColor: '#7c3aed', color: '#fff' } // 紫
+  return { backgroundColor: '#4b5563', color: '#fff' } // グレー
+}
+
 const formatMarketCap = (cap, market) => {
   if (!cap) return '-'
   if (market === 'JP') {
-    // 日本円（億円表示）
     const oku = cap / 100000000
     if (oku >= 10000) return `${(oku / 10000).toFixed(1)}兆`
     return `${oku.toFixed(0)}億`
   } else {
-    // 米ドル
     if (cap >= 1e12) return `$${(cap / 1e12).toFixed(1)}T`
     if (cap >= 1e9) return `$${(cap / 1e9).toFixed(0)}B`
     if (cap >= 1e6) return `$${(cap / 1e6).toFixed(0)}M`
@@ -215,9 +218,15 @@ const formatMarketCap = (cap, market) => {
 const formatPrice = (price, market) => {
   if (!price) return '-'
   if (market === 'JP') {
-    return `¥${price.toLocaleString()}`
+    return `¥${Math.round(price).toLocaleString()}`
   }
   return `$${price.toFixed(2)}`
+}
+
+const formatEarningsDate = (isoDate) => {
+  if (!isoDate) return null
+  const date = new Date(isoDate)
+  return `${date.getMonth() + 1}/${date.getDate()}`
 }
 
 function App() {
@@ -255,8 +264,9 @@ function App() {
   
   const sortedStocks = [...filteredStocks].sort((a, b) => (b.score || -1) - (a.score || -1))
   
-  // 決算間近の銘柄数
-  const earningsSoonCount = stocks.filter(s => s.daysToEarnings !== null && s.daysToEarnings >= 0 && s.daysToEarnings <= 14).length
+  const earningsSoonCount = stocks.filter(s => 
+    s.daysToEarnings !== null && s.daysToEarnings >= 0 && s.daysToEarnings <= 30
+  ).length
   
   return (
     <div style={styles.container}>
@@ -264,7 +274,7 @@ function App() {
         <div>
           <h1 style={styles.title}>📊 投資スコアリングダッシュボード</h1>
           <p style={styles.subtitle}>
-            {stocks.length}銘柄 | 4テーマ | 決算間近 {earningsSoonCount}件
+            {stocks.length}銘柄 | 4テーマ | 決算30日以内 {earningsSoonCount}件
             {lastUpdated && ` | 更新: ${new Date(lastUpdated).toLocaleString('ja-JP')}`}
           </p>
         </div>
@@ -320,6 +330,8 @@ function App() {
               ? (((stock.yearHigh - stock.price) / stock.yearHigh) * 100).toFixed(1)
               : '-'
             
+            const showEarnings = stock.daysToEarnings !== null && stock.daysToEarnings >= 0 && stock.daysToEarnings <= 60
+            
             return (
               <div key={`${stock.ticker}-${stock.theme}`} style={styles.card}>
                 <div style={styles.cardHeader}>
@@ -348,9 +360,14 @@ function App() {
                   }}>
                     {stock.theme}
                   </span>
-                  {stock.daysToEarnings !== null && stock.daysToEarnings >= 0 && stock.daysToEarnings <= 14 && (
-                    <span style={styles.earningsBadge}>
-                      📅 決算{stock.daysToEarnings === 0 ? '今日' : `${stock.daysToEarnings}日後`}
+                  {showEarnings && (
+                    <span style={{ 
+                      ...styles.earningsBadge, 
+                      ...getEarningsBadgeStyle(stock.daysToEarnings)
+                    }}>
+                      📅 {formatEarningsDate(stock.earningsDate)} 
+                      {stock.daysToEarnings === 0 ? '（今日）' : `（${stock.daysToEarnings}日後）`}
+                      {stock.earningsBonus > 0 && ` +${stock.earningsBonus}pt`}
                     </span>
                   )}
                 </div>
@@ -382,15 +399,6 @@ function App() {
                         </div>
                         <div style={styles.metricLabel}>PER</div>
                       </div>
-                      <div style={styles.metric}>
-                        <div style={{ 
-                          ...styles.metricValue,
-                          color: stock.earningsBonus > 0 ? '#a78bfa' : '#666'
-                        }}>
-                          {stock.earningsBonus > 0 ? `+${stock.earningsBonus}` : '-'}
-                        </div>
-                        <div style={styles.metricLabel}>決算ボーナス</div>
-                      </div>
                     </div>
                     
                     <div style={styles.priceRow}>
@@ -401,7 +409,7 @@ function App() {
                         ...styles.change,
                         color: (stock.change || 0) >= 0 ? '#34d399' : '#f87171'
                       }}>
-                        {(stock.change || 0) >= 0 ? '+' : ''}{stock.change?.toFixed(2) || 0}%
+                        {(stock.change || 0) >= 0 ? '+' : ''}{(stock.change || 0).toFixed(2)}%
                       </span>
                     </div>
                   </>
@@ -419,7 +427,7 @@ function App() {
       <footer style={{ marginTop: '40px', textAlign: 'center', color: '#666', fontSize: '12px' }}>
         <p>⚠️ 投資は自己責任で。参考情報であり投資助言ではありません。</p>
         <p style={{ marginTop: '8px' }}>
-          スコア基準: 高値距離(35点) + 時価総額(25点) + PER(25点) + 決算ボーナス(15点)
+          スコア: 高値距離(40点) + 時価総額(25点) + PER(20点) + 決算ボーナス(15点)
         </p>
       </footer>
     </div>
