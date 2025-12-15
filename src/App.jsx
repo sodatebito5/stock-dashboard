@@ -79,7 +79,8 @@ const styles = {
     backgroundColor: '#1a1a2e',
     borderRadius: '12px',
     padding: '20px',
-    border: '1px solid #2a2a4a'
+    border: '1px solid #2a2a4a',
+    position: 'relative'
   },
   cardHeader: {
     display: 'flex',
@@ -117,27 +118,36 @@ const styles = {
     borderRadius: '12px',
     fontSize: '11px',
     fontWeight: '500',
-    marginBottom: '12px'
+    marginRight: '8px'
+  },
+  earningsBadge: {
+    display: 'inline-block',
+    padding: '4px 10px',
+    borderRadius: '12px',
+    fontSize: '11px',
+    fontWeight: '500',
+    backgroundColor: '#7c3aed',
+    color: '#fff'
   },
   metrics: {
     display: 'grid',
-    gridTemplateColumns: 'repeat(3, 1fr)',
-    gap: '8px',
+    gridTemplateColumns: 'repeat(4, 1fr)',
+    gap: '6px',
     marginTop: '12px'
   },
   metric: {
     textAlign: 'center',
-    padding: '8px',
+    padding: '8px 4px',
     backgroundColor: '#0f0f23',
     borderRadius: '6px'
   },
   metricValue: {
-    fontSize: '14px',
+    fontSize: '13px',
     fontWeight: '600',
     color: '#fff'
   },
   metricLabel: {
-    fontSize: '10px',
+    fontSize: '9px',
     color: '#666',
     marginTop: '2px'
   },
@@ -186,12 +196,28 @@ const getScoreColor = (score) => {
   return { bg: '#4a1010', text: '#f87171' }
 }
 
-const formatMarketCap = (cap) => {
+const formatMarketCap = (cap, market) => {
   if (!cap) return '-'
-  if (cap >= 1e12) return `$${(cap / 1e12).toFixed(1)}T`
-  if (cap >= 1e9) return `$${(cap / 1e9).toFixed(0)}B`
-  if (cap >= 1e6) return `$${(cap / 1e6).toFixed(0)}M`
-  return `$${cap}`
+  if (market === 'JP') {
+    // 日本円（億円表示）
+    const oku = cap / 100000000
+    if (oku >= 10000) return `${(oku / 10000).toFixed(1)}兆`
+    return `${oku.toFixed(0)}億`
+  } else {
+    // 米ドル
+    if (cap >= 1e12) return `$${(cap / 1e12).toFixed(1)}T`
+    if (cap >= 1e9) return `$${(cap / 1e9).toFixed(0)}B`
+    if (cap >= 1e6) return `$${(cap / 1e6).toFixed(0)}M`
+    return `$${cap}`
+  }
+}
+
+const formatPrice = (price, market) => {
+  if (!price) return '-'
+  if (market === 'JP') {
+    return `¥${price.toLocaleString()}`
+  }
+  return `$${price.toFixed(2)}`
 }
 
 function App() {
@@ -229,14 +255,17 @@ function App() {
   
   const sortedStocks = [...filteredStocks].sort((a, b) => (b.score || -1) - (a.score || -1))
   
+  // 決算間近の銘柄数
+  const earningsSoonCount = stocks.filter(s => s.daysToEarnings !== null && s.daysToEarnings >= 0 && s.daysToEarnings <= 14).length
+  
   return (
     <div style={styles.container}>
       <header style={styles.header}>
         <div>
           <h1 style={styles.title}>📊 投資スコアリングダッシュボード</h1>
           <p style={styles.subtitle}>
-            {stocks.length}銘柄 | 4テーマ
-            {lastUpdated && ` | 最終更新: ${new Date(lastUpdated).toLocaleString('ja-JP')}`}
+            {stocks.length}銘柄 | 4テーマ | 決算間近 {earningsSoonCount}件
+            {lastUpdated && ` | 更新: ${new Date(lastUpdated).toLocaleString('ja-JP')}`}
           </p>
         </div>
         <button style={styles.refreshBtn} onClick={fetchData} disabled={loading}>
@@ -310,13 +339,21 @@ function App() {
                   </div>
                 </div>
                 
-                <span style={{ 
-                  ...styles.themeBadge, 
-                  backgroundColor: themeColor.bg,
-                  color: themeColor.text 
-                }}>
-                  {stock.theme}
-                </span>
+                {/* バッジ */}
+                <div style={{ marginBottom: '12px' }}>
+                  <span style={{ 
+                    ...styles.themeBadge, 
+                    backgroundColor: themeColor.bg,
+                    color: themeColor.text 
+                  }}>
+                    {stock.theme}
+                  </span>
+                  {stock.daysToEarnings !== null && stock.daysToEarnings >= 0 && stock.daysToEarnings <= 14 && (
+                    <span style={styles.earningsBadge}>
+                      📅 決算{stock.daysToEarnings === 0 ? '今日' : `${stock.daysToEarnings}日後`}
+                    </span>
+                  )}
+                </div>
                 
                 {stock.score !== null ? (
                   <>
@@ -332,7 +369,7 @@ function App() {
                       </div>
                       <div style={styles.metric}>
                         <div style={styles.metricValue}>
-                          {formatMarketCap(stock.marketCap)}
+                          {formatMarketCap(stock.marketCap, stock.market)}
                         </div>
                         <div style={styles.metricLabel}>時価総額</div>
                       </div>
@@ -345,11 +382,20 @@ function App() {
                         </div>
                         <div style={styles.metricLabel}>PER</div>
                       </div>
+                      <div style={styles.metric}>
+                        <div style={{ 
+                          ...styles.metricValue,
+                          color: stock.earningsBonus > 0 ? '#a78bfa' : '#666'
+                        }}>
+                          {stock.earningsBonus > 0 ? `+${stock.earningsBonus}` : '-'}
+                        </div>
+                        <div style={styles.metricLabel}>決算ボーナス</div>
+                      </div>
                     </div>
                     
                     <div style={styles.priceRow}>
                       <span style={styles.price}>
-                        ${stock.price?.toFixed(2) || '-'}
+                        {formatPrice(stock.price, stock.market)}
                       </span>
                       <span style={{ 
                         ...styles.change,
@@ -373,7 +419,7 @@ function App() {
       <footer style={{ marginTop: '40px', textAlign: 'center', color: '#666', fontSize: '12px' }}>
         <p>⚠️ 投資は自己責任で。参考情報であり投資助言ではありません。</p>
         <p style={{ marginTop: '8px' }}>
-          スコア基準: 高値距離(40点) + 時価総額(30点) + PER(30点)
+          スコア基準: 高値距離(35点) + 時価総額(25点) + PER(25点) + 決算ボーナス(15点)
         </p>
       </footer>
     </div>
