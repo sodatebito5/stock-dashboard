@@ -37,9 +37,23 @@ const styles = {
     color: '#888',
     marginTop: '4px'
   },
+  headerButtons: {
+    display: 'flex',
+    gap: '12px'
+  },
   refreshBtn: {
     padding: '12px 24px',
     backgroundColor: '#3b82f6',
+    color: 'white',
+    border: 'none',
+    borderRadius: '8px',
+    cursor: 'pointer',
+    fontSize: '14px',
+    fontWeight: '500'
+  },
+  addBtn: {
+    padding: '12px 24px',
+    backgroundColor: '#10b981',
     color: 'white',
     border: 'none',
     borderRadius: '8px',
@@ -176,6 +190,98 @@ const styles = {
     padding: '20px',
     color: '#666',
     fontSize: '13px'
+  },
+  // モーダル
+  modalOverlay: {
+    position: 'fixed',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+    display: 'flex',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 1000
+  },
+  modal: {
+    backgroundColor: '#1a1a2e',
+    borderRadius: '16px',
+    padding: '32px',
+    width: '90%',
+    maxWidth: '480px',
+    border: '1px solid #2a2a4a'
+  },
+  modalTitle: {
+    fontSize: '20px',
+    fontWeight: '700',
+    color: '#fff',
+    marginBottom: '24px'
+  },
+  formGroup: {
+    marginBottom: '16px'
+  },
+  label: {
+    display: 'block',
+    fontSize: '13px',
+    color: '#888',
+    marginBottom: '6px'
+  },
+  input: {
+    width: '100%',
+    padding: '12px',
+    backgroundColor: '#0f0f23',
+    border: '1px solid #333',
+    borderRadius: '8px',
+    color: '#fff',
+    fontSize: '14px',
+    boxSizing: 'border-box'
+  },
+  select: {
+    width: '100%',
+    padding: '12px',
+    backgroundColor: '#0f0f23',
+    border: '1px solid #333',
+    borderRadius: '8px',
+    color: '#fff',
+    fontSize: '14px',
+    boxSizing: 'border-box'
+  },
+  modalButtons: {
+    display: 'flex',
+    gap: '12px',
+    marginTop: '24px'
+  },
+  cancelBtn: {
+    flex: 1,
+    padding: '12px',
+    backgroundColor: '#333',
+    color: '#fff',
+    border: 'none',
+    borderRadius: '8px',
+    cursor: 'pointer',
+    fontSize: '14px'
+  },
+  submitBtn: {
+    flex: 1,
+    padding: '12px',
+    backgroundColor: '#10b981',
+    color: '#fff',
+    border: 'none',
+    borderRadius: '8px',
+    cursor: 'pointer',
+    fontSize: '14px',
+    fontWeight: '500'
+  },
+  error: {
+    color: '#f87171',
+    fontSize: '13px',
+    marginTop: '8px'
+  },
+  success: {
+    color: '#34d399',
+    fontSize: '13px',
+    marginTop: '8px'
   }
 }
 
@@ -195,10 +301,10 @@ const getScoreColor = (score) => {
 }
 
 const getEarningsBadgeStyle = (days) => {
-  if (days <= 7) return { backgroundColor: '#dc2626', color: '#fff' } // 赤
-  if (days <= 14) return { backgroundColor: '#f59e0b', color: '#fff' } // オレンジ
-  if (days <= 30) return { backgroundColor: '#7c3aed', color: '#fff' } // 紫
-  return { backgroundColor: '#4b5563', color: '#fff' } // グレー
+  if (days <= 7) return { backgroundColor: '#dc2626', color: '#fff' }
+  if (days <= 14) return { backgroundColor: '#f59e0b', color: '#fff' }
+  if (days <= 30) return { backgroundColor: '#7c3aed', color: '#fff' }
+  return { backgroundColor: '#4b5563', color: '#fff' }
 }
 
 const formatMarketCap = (cap, market) => {
@@ -235,6 +341,18 @@ function App() {
   const [lastUpdated, setLastUpdated] = useState(null)
   const [activeTheme, setActiveTheme] = useState('all')
   const [activeMarket, setActiveMarket] = useState('all')
+  const [showModal, setShowModal] = useState(false)
+  const [formData, setFormData] = useState({
+    ticker: '',
+    name: '',
+    market: 'US',
+    theme: 'AI・半導体',
+    description: '',
+    earningsDate: ''
+  })
+  const [formError, setFormError] = useState('')
+  const [formSuccess, setFormSuccess] = useState('')
+  const [submitting, setSubmitting] = useState(false)
   
   const themes = ['all', 'AI・半導体', '宇宙', '防衛', 'エネルギー']
   const markets = ['all', 'US', 'JP']
@@ -255,6 +373,52 @@ function App() {
   useEffect(() => {
     fetchData()
   }, [])
+  
+  const handleAddStock = async () => {
+    setFormError('')
+    setFormSuccess('')
+    
+    if (!formData.ticker) {
+      setFormError('ティッカーを入力してください')
+      return
+    }
+    
+    setSubmitting(true)
+    
+    try {
+      const response = await fetch(GAS_API_URL, {
+        method: 'POST',
+        body: JSON.stringify({
+          action: 'addStock',
+          ...formData
+        })
+      })
+      const result = await response.json()
+      
+      if (result.error) {
+        setFormError(result.error)
+      } else {
+        setFormSuccess(`${result.ticker} を追加しました！`)
+        setFormData({
+          ticker: '',
+          name: '',
+          market: 'US',
+          theme: 'AI・半導体',
+          description: '',
+          earningsDate: ''
+        })
+        setTimeout(() => {
+          setShowModal(false)
+          setFormSuccess('')
+          fetchData()
+        }, 1500)
+      }
+    } catch (error) {
+      setFormError('エラーが発生しました: ' + error.message)
+    }
+    
+    setSubmitting(false)
+  }
   
   const filteredStocks = stocks.filter(stock => {
     if (activeTheme !== 'all' && stock.theme !== activeTheme) return false
@@ -278,9 +442,14 @@ function App() {
             {lastUpdated && ` | 更新: ${new Date(lastUpdated).toLocaleString('ja-JP')}`}
           </p>
         </div>
-        <button style={styles.refreshBtn} onClick={fetchData} disabled={loading}>
-          {loading ? '⏳ 取得中...' : '🔄 データ更新'}
-        </button>
+        <div style={styles.headerButtons}>
+          <button style={styles.addBtn} onClick={() => setShowModal(true)}>
+            ➕ 銘柄追加
+          </button>
+          <button style={styles.refreshBtn} onClick={fetchData} disabled={loading}>
+            {loading ? '⏳ 取得中...' : '🔄 データ更新'}
+          </button>
+        </div>
       </header>
       
       <div style={styles.filters}>
@@ -351,7 +520,6 @@ function App() {
                   </div>
                 </div>
                 
-                {/* バッジ */}
                 <div style={{ marginBottom: '12px' }}>
                   <span style={{ 
                     ...styles.themeBadge, 
@@ -430,6 +598,100 @@ function App() {
           スコア: 高値距離(40点) + 時価総額(25点) + PER(20点) + 決算ボーナス(15点)
         </p>
       </footer>
+      
+      {/* 銘柄追加モーダル */}
+      {showModal && (
+        <div style={styles.modalOverlay} onClick={() => setShowModal(false)}>
+          <div style={styles.modal} onClick={e => e.stopPropagation()}>
+            <h2 style={styles.modalTitle}>➕ 銘柄を追加</h2>
+            
+            <div style={styles.formGroup}>
+              <label style={styles.label}>ティッカー *</label>
+              <input
+                type="text"
+                style={styles.input}
+                placeholder="例: AAPL, 7203"
+                value={formData.ticker}
+                onChange={e => setFormData({ ...formData, ticker: e.target.value })}
+              />
+            </div>
+            
+            <div style={styles.formGroup}>
+              <label style={styles.label}>銘柄名</label>
+              <input
+                type="text"
+                style={styles.input}
+                placeholder="例: アップル"
+                value={formData.name}
+                onChange={e => setFormData({ ...formData, name: e.target.value })}
+              />
+            </div>
+            
+            <div style={styles.formGroup}>
+              <label style={styles.label}>市場</label>
+              <select
+                style={styles.select}
+                value={formData.market}
+                onChange={e => setFormData({ ...formData, market: e.target.value })}
+              >
+                <option value="US">🇺🇸 米国</option>
+                <option value="JP">🇯🇵 日本</option>
+              </select>
+            </div>
+            
+            <div style={styles.formGroup}>
+              <label style={styles.label}>テーマ</label>
+              <select
+                style={styles.select}
+                value={formData.theme}
+                onChange={e => setFormData({ ...formData, theme: e.target.value })}
+              >
+                <option value="AI・半導体">AI・半導体</option>
+                <option value="宇宙">宇宙</option>
+                <option value="防衛">防衛</option>
+                <option value="エネルギー">エネルギー</option>
+              </select>
+            </div>
+            
+            <div style={styles.formGroup}>
+              <label style={styles.label}>説明（任意）</label>
+              <input
+                type="text"
+                style={styles.input}
+                placeholder="例: 時価総額世界最大"
+                value={formData.description}
+                onChange={e => setFormData({ ...formData, description: e.target.value })}
+              />
+            </div>
+            
+            <div style={styles.formGroup}>
+              <label style={styles.label}>決算日（任意）</label>
+              <input
+                type="date"
+                style={styles.input}
+                value={formData.earningsDate}
+                onChange={e => setFormData({ ...formData, earningsDate: e.target.value })}
+              />
+            </div>
+            
+            {formError && <p style={styles.error}>❌ {formError}</p>}
+            {formSuccess && <p style={styles.success}>✅ {formSuccess}</p>}
+            
+            <div style={styles.modalButtons}>
+              <button style={styles.cancelBtn} onClick={() => setShowModal(false)}>
+                キャンセル
+              </button>
+              <button 
+                style={styles.submitBtn} 
+                onClick={handleAddStock}
+                disabled={submitting}
+              >
+                {submitting ? '追加中...' : '追加する'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
